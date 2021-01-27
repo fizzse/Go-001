@@ -57,10 +57,14 @@ func serverTcp(ctx context.Context) error {
 		return err
 	}
 
+	defer lister.Close()
+	eg, ctx := errgroup.WithContext(ctx)
+
+label:
 	for {
 		select {
 		case <-ctx.Done():
-			return lister.Close()
+			break label
 
 		default:
 			tcpConn, err := lister.Accept()
@@ -69,9 +73,13 @@ func serverTcp(ctx context.Context) error {
 				continue
 			}
 
-			NewTcpHandle(tcpConn, 100).handle(ctx) // errgroup
+			eg.Go(func() error {
+				return NewTcpHandle(tcpConn, 100).handle(ctx)
+			})
 		}
 	}
+
+	return eg.Wait()
 }
 
 func NewTcpHandle(conn net.Conn, caps int) *tcpHandle {
